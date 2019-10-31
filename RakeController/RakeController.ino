@@ -1,6 +1,6 @@
 #include "MotorController.h"
 #include <ArduinoJson.h>
-#include <ArduinoSTL.h>
+
 
 StaticJsonDocument<200> doc;
 
@@ -75,6 +75,12 @@ void processCommand(JsonVariant command) {
   else if (command["jog"])
   {
     Serial.println("Jog Command");
+    if (command["jog"] == "fwd"){
+      controller.jogStart(true);
+    } else if (command["jog"] == "stop"){
+      controller.jogStop();
+    }
+    
   }
   else if (command["start"])
   {
@@ -119,12 +125,13 @@ void setup() {
   Serial.begin(9600);
   controller.controllerInit();
   controller.stopMotor();
+  controller.startProgram();
 }
 
 void loop() {
   recvWithStartEndMarkers();
   getCommand();
-
+  controller.mainStateLoop();
 }
 
 
