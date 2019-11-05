@@ -1,5 +1,9 @@
 #include "./MotorController.h"
 
+const int CLOCK = 16;
+const int PRESCALER = 128;
+const unsigned long RPM_CON = 150150;
+const int COUNTER_MULTIPLIER = (CLOCK*RPM_CON)/PRESCALER;
 
 MotorController::MotorController(int pulsePos, int dirPos, int gateLift, int gateDrop) {
   this->pulsePos = pulsePos;
@@ -16,7 +20,7 @@ void MotorController::controllerInit() {
   pinMode(dirPos, OUTPUT);
   pinMode(gateLift, OUTPUT);
   pinMode(gateDrop, OUTPUT);
-
+  
 
   motorStates[0] = (MotorState) {
     3, 50, false, false, "state1"
@@ -25,19 +29,18 @@ void MotorController::controllerInit() {
     20, 140, false, false, "state2"
   };
   motorStates[2] = (MotorState) {
-    25, 130, false, false, "state3"
+    133, 130, false, false, "state3"
   };
   motorStates[3] = (MotorState) {
-    15, 25, false, false, "state4"
+    1014, 25, false, false, "state4"
   };
   motorStates[4] = (MotorState) {
-    40, 100, true, false, "state5"
+    65, 100, true, false, "state5"
   };
   motorStates[5] = (MotorState) {
-    24, 200, true, true, "state6"
+    197, 200, true, true, "state6"
   };
   currentState = 0;
-
   interruptInit();
   controllerActive = true;
 }
@@ -50,19 +53,24 @@ void MotorController::interruptInit() {
   TCNT1  = 0;
 
   //Set the compare match register
-  OCR1A = 1000; // = 16000000 / (1 * 13333.333333333334) - 1 (must be <65536)
+  OCR1A = ((CLOCK*RPM_CON)/(2*PRESCALER*motorStates[currentState].mSpeed))-1;; // = 16000000 / (1 * 13333.333333333334) - 1 (must be <65536)
   // turn on CTC mode
   TCCR1B |= (1 << WGM12);
   // Set CS12, CS11 and CS10 bits for 1 prescaler
-  TCCR1B |= (1 << CS12) | (0 << CS11) | (1 << CS10);
+  TCCR1B |= (1 << CS12) | (0 << CS11) | (1 << CS10); //Prescaler for compare match register set to 128
   // enable timer compare interrupt
   TIMSK1 |= (1 << OCIE1A);
   sei(); //allow interrupts
 }
 
 //TODO Work out speed conversion values RPM->pulse frequency->timer counter value
-void MotorController::interruptUpdate(int value) {
-  OCR1A = value * 100;
+void MotorController::interruptUpdate(int speedRPM) {
+  int counter = (COUNTER_MULTIPLIER/(2*speedRPM));
+  Serial.print("Speed: ");
+  Serial.print(speedRPM);
+  Serial.print(" Counter: ");
+  Serial.println(counter);
+  OCR1A = counter;
 }
 
 void MotorController::mainStateLoop() {
@@ -85,8 +93,6 @@ void MotorController::setMotorState(bool unpausing) {
   if (!unpausing) {
     timeInterval = motorStates[currentState].sTime;
   }
-
-
   interruptUpdate(motorStates[currentState].mSpeed);
   digitalWrite(dirPos, motorStates[currentState].mDir);
   digitalWrite(gateLift, motorStates[currentState].gate);
