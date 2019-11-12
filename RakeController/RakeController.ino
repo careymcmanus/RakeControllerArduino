@@ -74,9 +74,11 @@ void processCommand(JsonVariant command) {
   }
   else if (command["jog"])
   {
-    Serial.println("Jog Command");
+    Serial.println("Jog");
     if (command["jog"] == "fwd"){
       controller.jogStart(true);
+    } else if (command["jog"] == "bwd") {
+      controller.jogStart(false);
     } else if (command["jog"] == "stop"){
       controller.jogStop();
     }
@@ -124,7 +126,6 @@ void setup() {
 
   Serial.begin(9600);
   controller.controllerInit();
-  controller.stopMotor();
   controller.startProgram();
 }
 

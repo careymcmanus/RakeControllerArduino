@@ -1,9 +1,9 @@
 #include "./MotorController.h"
 
-const int CLOCK = 16;
-const int PRESCALER = 128;
-const unsigned long RPM_CON = 150150;
-const int COUNTER_MULTIPLIER = (CLOCK*RPM_CON)/PRESCALER;
+const unsigned long CLOCK = 16;
+const int PRESCALER = 8;
+const unsigned long RPM_CON = 75075;
+const unsigned long COUNTER_MULTIPLIER = (CLOCK*RPM_CON)/PRESCALER;
 
 MotorController::MotorController(int pulsePos, int dirPos, int gateLift, int gateDrop) {
   this->pulsePos = pulsePos;
@@ -26,10 +26,10 @@ void MotorController::controllerInit() {
     3, 50, false, false, "state1"
   };
   motorStates[1] = (MotorState) {
-    20, 140, false, false, "state2"
+    20, 180, false, false, "state2"
   };
   motorStates[2] = (MotorState) {
-    133, 130, false, false, "state3"
+    133, 200, false, false, "state3"
   };
   motorStates[3] = (MotorState) {
     1014, 25, false, false, "state4"
@@ -51,21 +51,19 @@ void MotorController::interruptInit() {
   TCCR1A = 0;
   TCCR1B = 0;
   TCNT1  = 0;
-
-  //Set the compare match register
-  OCR1A = ((CLOCK*RPM_CON)/(2*PRESCALER*motorStates[currentState].mSpeed))-1;; // = 16000000 / (1 * 13333.333333333334) - 1 (must be <65536)
+  interruptUpdate(motorStates[currentState].mSpeed);
   // turn on CTC mode
   TCCR1B |= (1 << WGM12);
   // Set CS12, CS11 and CS10 bits for 1 prescaler
-  TCCR1B |= (1 << CS12) | (0 << CS11) | (1 << CS10); //Prescaler for compare match register set to 128
+  TCCR1B |= (0 << CS12) | ( 1<< CS11) | (0 << CS10); //Prescaler for compare match register set to 128
   // enable timer compare interrupt
   TIMSK1 |= (1 << OCIE1A);
   sei(); //allow interrupts
 }
 
-//TODO Work out speed conversion values RPM->pulse frequency->timer counter value
+
 void MotorController::interruptUpdate(int speedRPM) {
-  int counter = (COUNTER_MULTIPLIER/(2*speedRPM));
+  long counter = (COUNTER_MULTIPLIER/speedRPM)-1;
   Serial.print("Speed: ");
   Serial.print(speedRPM);
   Serial.print(" Counter: ");
@@ -122,8 +120,7 @@ void MotorController::startProgram() {
 
 void MotorController::startMotor() {
   TCCR1B |= (1 << WGM12);
-  // Set CS12, CS11 and CS10 bits for 1 prescaler
-  TCCR1B |= (1 << CS12) | (0 << CS11) | (1 << CS10);
+  
   Serial.println("motor on");
 }
 
@@ -133,7 +130,7 @@ void MotorController::jogStart(bool mDirection) {
   Serial.print("current time interval: ");
   Serial.println(timeInterval);
   digitalWrite(dirPos, mDirection);
-  interruptUpdate(5000);
+  interruptUpdate(180);
   startMotor();
 }
 
@@ -144,10 +141,10 @@ void MotorController::jogStop() {
   Serial.print(pausedTime);
   Serial.print(" New Time Interval: ");
   Serial.println(timeInterval);
-  stopMotor();
-  startMotor();
+
   controllerActive = true;
   setMotorState(true);
+   startMotor();
 }
 
 void MotorController::drive() {
@@ -158,14 +155,10 @@ void MotorController::drive() {
 }
 
 void MotorController::iterateState() {
-  Serial.print("Current state: ");
-  Serial.print(motorStates[currentState].sName);
   currentState++;
   if (currentState == numberStates) {
     currentState = 0;
   }
-  Serial.print(" Changing State to: ");
-  Serial.println(motorStates[currentState].sName);
   setMotorState(false);
 }
 
