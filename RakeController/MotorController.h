@@ -8,11 +8,11 @@
 #endif
 
 #include "Arduino.h"
-#include <ArduinoSTL.h>
+#include <SoftwareSerial.h>
 
 typedef struct{
-  int mSpeed;
   int sTime;
+  int mSpeed;
   bool mDir;
   bool gate;
   String sName;
@@ -21,8 +21,12 @@ typedef struct{
 
 class MotorController {
     private:
+        unsigned long timeInterval;
+        unsigned long pauseTime;
+        unsigned long previousTime = 0;
+        static const int numberStates = 6;
         byte pulsePos, dirPos, gateLift, gateDrop;
-        MotorState motorStates[3];
+        MotorState motorStates[numberStates];
         int currentState;
         bool controllerActive;
         
@@ -35,17 +39,24 @@ class MotorController {
     void interruptInit();
     void interruptUpdate(int value);
 
-    void setMotorState();
+    void mainStateLoop();
+
+    void setMotorState(bool unpausing);
+    void startProgram();
+    void stopProgram();
     void stopMotor();
     void startMotor();
     void jogStart(bool mDirection);
     void jogStop();
     void drive();
+    void iterateState();
+    void updateState();
+    void printStates();
 
     void toggleGate();
     
     void setState(String stateName, int stateSpeed);
     void setState(String stateName, int stateSpeed, bool motorDirection, bool gateState);
-    void getStates();
+    void getStates(SoftwareSerial mySerial);
     
 };

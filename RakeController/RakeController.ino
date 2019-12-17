@@ -1,7 +1,8 @@
 #include "MotorController.h"
 #include <ArduinoJson.h>
-#include <ArduinoSTL.h>
+#include <SoftwareSerial.h>
 
+SoftwareSerial mySerial(2, 3); // RX, TX
 StaticJsonDocument<200> doc;
 
 const byte numChars = 128;
@@ -16,8 +17,8 @@ void recvWithStartEndMarkers() {
   char endMarker = '>';
   char rc;
 
-  while (Serial.available() > 0 && newData == false) {
-    rc = Serial.read();
+  while (mySerial.available() > 0 && newData == false) {
+    rc = mySerial.read();
 
     if (recvInProgress == true) {
       if (rc != endMarker) {
@@ -58,23 +59,24 @@ void processJson(char input[]) {
 void processCommand(JsonVariant command) {
   Serial.println("Processing Command... ");
 
-
+  
   if (command["set"])
   {
     Serial.println("Set Command");
-    if (command["set"]["mdir"].isNull() || command["set"]["gState"].isNull()){
-      
-    controller.setState(command["set"]["name"], command["set"]["speed"].as<int>());
+    if (command["set"]["mdir"].isNull() || command["set"]["gState"].isNull()) {
+
+      controller.setState(command["set"]["name"], command["set"]["speed"].as<int>());
     }
   }
   else if (command["get"])
   {
     Serial.println("Get Command");
-    controller.getStates();
+    controller.getStates(mySerial);
   }
   else if (command["jog"])
   {
     Serial.println("Jog Command");
+    controller.printStates();
   }
   else if (command["start"])
   {
@@ -93,10 +95,10 @@ void processCommand(JsonVariant command) {
 void getCommand() {
   if (newData == true) {
     // If serial command starts with a bracket then process command as a Json Command
-
+    Serial.println(receivedChars);
     if (receivedChars[0] == '{') {
-      Serial.print("This is a Json Object : ");
-
+      Serial.println("This is a Json Object : ");
+      Serial.println(receivedChars);
       processJson(receivedChars);
 
       JsonVariant Command = doc.as<JsonVariant>();
@@ -114,16 +116,17 @@ void getCommand() {
 
 
 void setup() {
-  
 
+  mySerial.begin(9600);
   Serial.begin(9600);
   controller.controllerInit();
-  controller.stopMotor();
+  controller.startProgram();
 }
 
 void loop() {
   recvWithStartEndMarkers();
   getCommand();
+  controller.mainStateLoop();
 
 }
 
