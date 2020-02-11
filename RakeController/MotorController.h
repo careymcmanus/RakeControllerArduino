@@ -8,7 +8,10 @@
 #endif
 
 #include "Arduino.h"
+#include <ArduinoJson.h>
 #include <SoftwareSerial.h>
+
+
 
 typedef struct{
   int sTime;
@@ -29,11 +32,20 @@ class MotorController {
         MotorState motorStates[numberStates];
         int currentState;
         bool controllerActive;
+     
         
        
 
     public:
     MotorController(int pulsePos, int dirPos, int gateLift, int gateDrop);
+
+    /*
+     * Functions for processing incoming commands
+     */
+    void recvWithStartEndMarkers();
+    void processJson(char input[]);
+    void processCommand(JsonVariant command);
+    void getCommand();
 
     void controllerInit();
     void interruptInit();
@@ -52,11 +64,11 @@ class MotorController {
     void iterateState();
     void updateState();
     void printStates();
-
     void toggleGate();
     
     void setState(String stateName, int stateSpeed);
     void setState(String stateName, int stateSpeed, bool motorDirection, bool gateState);
-    void getStates(SoftwareSerial mySerial);
+    void getStates();
+    void getCurrent();
     
 };
