@@ -65,60 +65,53 @@ void MotorController::processJson(char input[]) {
   }
 }
 
+
+
 void MotorController::processCommand(JsonVariant command) {
-  Serial.println("Processing Command... ");
-
-
-  if (command["set"])
-  {
-    JsonObject state = command["set"];
-    String stateName = state["name"];
-    Serial.println(stateName);
-
-  }
-  else if (command["get"])
-  {
-    Serial.println("Get Command");
-    if (command["get"] == "all") {
-      //Serial.println("Get all states command");
-      getStates();
-    } else if (command["get"] == "current") {
-      Serial.println("Get current state command");
-      getCurrent();
-    }
-  }
-  else if (command["jog"])
-  {
-    Serial.println("Jog Command");
-    printStates();
-  }
-  else if (command["start"])
-  {
-    Serial.println("Start Command");
-  }
-  else if (!command["on"].isNull()) {
-  }
-  else
-  {
-    Serial.println("Invalid Command");
-  }
+  
 }
 
 void MotorController::getCommand() {
   if (newData == true) {
-    // If serial command starts with a bracket then process command as a Json Command
     Serial.println(receivedChars);
-    if (receivedChars[0] == '{') {
-      Serial.println("This is a Json Object : ");
-      Serial.println(receivedChars);
-      processJson(receivedChars);
-
-      JsonVariant Command = doc.as<JsonVariant>();
-      processCommand(Command);
-    } else {
-      Serial.println("Invalid Command ... ");
+    byte command = receivedChars[0];
+    Serial.println(command);
+    switch(command){
+      case 0:
+        Serial.println("Stop Program");
+        //stopProgram();
+        break;
+      case 1:
+        Serial.println("Start Program");
+        //startProgram();
+        break;
+      case 2:
+        Serial.println("Get States");
+        //getStates();
+        break;
+      case 3:
+        Serial.println("Get Current");
+        //getCurrent();
+        break;
+      case 4:
+        Serial.println("Fwd Jog");
+        //startJog(true);
+        break;
+      case 5:
+        Serial.println("Back Jog");
+        //startJog(false);
+        break;
+      case 6:
+        Serial.println("Stop Jog");
+        //stopJog();
+        break;
+      case 7:
+        Serial.println("Set State");
+        //setState();
+        break;
+      default:
+        break;
     }
-
     newData = false;
   }
 }
@@ -185,8 +178,8 @@ void MotorController::mainStateLoop() {
 
   if (controllerActive) {
     unsigned long currentTime = millis();
-    unsigned long dTime = (currentTime - previousTime) / 1000;
-    if (dTime > timeInterval) {
+    unsigned long dTime = (currentTime - previousTime);
+    if (dTime > timeInterval*1000) {
       previousTime = currentTime;
       Serial.print("Time Period: ");
       Serial.println(dTime);
