@@ -71,11 +71,10 @@ void MotorController::processCommand(JsonVariant command) {
 
   if (command["set"])
   {
-    Serial.println("Set Command");
-    if (command["set"]["mdir"].isNull() || command["set"]["gState"].isNull()) {
+    JsonObject state = command["set"];
+    String stateName = state["name"];
+    Serial.println(stateName);
 
-      setState(command["set"]["name"], command["set"]["speed"].as<int>());
-    }
   }
   else if (command["get"])
   {
@@ -274,8 +273,9 @@ void MotorController::iterateState() {
   if (currentState == numberStates) {
     currentState = 0;
   }
-  setMotorState(false);
   getCurrent();
+  setMotorState(false);
+  
 }
 
 void MotorController::toggleGate() {
@@ -326,7 +326,7 @@ void MotorController::setState(String stateName, int stateSpeed, bool mDir, bool
 
 void MotorController::getCurrent() {
   String message = "<{\"current\":" + String(currentState) + "}>";
-  //  mySerial.println(message);
+  mySerial.println(message);
 }
 
 void MotorController::getStates() {
