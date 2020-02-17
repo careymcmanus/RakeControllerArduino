@@ -73,41 +73,43 @@ void MotorController::processCommand(JsonVariant command) {
 
 void MotorController::getCommand() {
   if (newData == true) {
-    Serial.println(receivedChars);
-    byte command = receivedChars[0];
+    //USerial.println(receivedChars);
+    char command = receivedChars[0];
     Serial.println(command);
-    switch(command){
-      case 0:
+    byte c = (byte)command;
+    Serial.println(c);
+    switch(c){
+      case 48:
         Serial.println("Stop Program");
         //stopProgram();
         break;
-      case 1:
+      case 49:
         Serial.println("Start Program");
         //startProgram();
         break;
-      case 2:
+      case 50:
         Serial.println("Get States");
-        //getStates();
+        getStates();
         break;
-      case 3:
+      case 51:
         Serial.println("Get Current");
-        //getCurrent();
+        getCurrent();
         break;
-      case 4:
+      case 52:
         Serial.println("Fwd Jog");
-        //startJog(true);
+        jogStart(true);
         break;
-      case 5:
+      case 53:
         Serial.println("Back Jog");
-        //startJog(false);
+        jogStart(false);
         break;
-      case 6:
+      case 54:
         Serial.println("Stop Jog");
-        //stopJog();
+        jogStop();
         break;
-      case 7:
+      case 55:
         Serial.println("Set State");
-        //setState();
+        setState();
         break;
       default:
         break;
@@ -276,46 +278,27 @@ void MotorController::toggleGate() {
   digitalWrite(gateDrop, !digitalRead(gateDrop));
 }
 
-void MotorController::setState(String stateName, int stateSpeed) {
-  for (int i = 0; i < numberStates; i++) {
+void MotorController::setState() {
 
-    if (motorStates[i].sName == stateName) {
-      Serial.println("setting motor state ");
-
-      motorStates[i].mSpeed = stateSpeed;
-      Serial.print("Motor State ");
-      Serial.println(motorStates[i].sName);
-      Serial.println(" set with the following properties");
-      Serial.print("Motor Speed:");
-      Serial.println(motorStates[i].mSpeed);
-      return;
-    }
-  }
-  Serial.println("State not found");
+    String command = receivedChars+2;
+    Serial.println(command);
+//  for (int i = 0; i < numberStates; i++) {
+//
+//    if (motorStates[i].sName == stateName) {
+//      Serial.println("setting motor state ");
+//
+//      motorStates[i].mSpeed = stateSpeed;
+//      Serial.print("Motor State ");
+//      Serial.println(motorStates[i].sName);
+//      Serial.println(" set with the following properties");
+//      Serial.print("Motor Speed:");
+//      Serial.println(motorStates[i].mSpeed);
+//      return;
+//    }
+//  }
+//  Serial.println("State not found");
 }
 
-void MotorController::setState(String stateName, int stateSpeed, bool mDir, bool gate) {
-  for (int i = 0; i < numberStates; i++) {
-
-    if (motorStates[i].sName == stateName) {
-      Serial.println("setting motor state ");
-
-      motorStates[i].mSpeed = stateSpeed;
-      motorStates[i].mDir = mDir;
-      motorStates[i].gate = gate;
-      Serial.print("Motor State ");
-      Serial.println(motorStates[i].sName);
-      Serial.println(" set with the following properties");
-      Serial.print(motorStates[i].mSpeed);
-      Serial.print(" : ");
-      Serial.print(motorStates[i].mDir);
-      Serial.print(" : ");
-      Serial.println(motorStates[i].gate);
-      return;
-    }
-  }
-  Serial.println("State not found");
-}
 
 void MotorController::getCurrent() {
   String message = "<{\"current\":" + String(currentState) + "}>";

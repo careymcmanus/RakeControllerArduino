@@ -66,8 +66,7 @@ class MotorController {
     void printStates();
     void toggleGate();
     
-    void setState(String stateName, int stateSpeed);
-    void setState(String stateName, int stateSpeed, bool motorDirection, bool gateState);
+    void setState();
     void getStates();
     void getCurrent();
     
