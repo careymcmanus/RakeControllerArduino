@@ -10,7 +10,9 @@ char receivedChars[numChars];
 boolean newData = false;
 char stateMessage[200];
 
-StaticJsonDocument<200> doc;
+const size_t capacity = JSON_OBJECT_SIZE(5) + 40;
+StaticJsonDocument<capacity> doc;
+
 SoftwareSerial mySerial(2, 3); // RX, TX
 
 MotorController::MotorController(int pulsePos, int dirPos, int gateLift, int gateDrop) {
@@ -53,23 +55,6 @@ void MotorController::recvWithStartEndMarkers() {
   }
 }
 
-void MotorController::processJson(char input[]) {
-  DeserializationError error = deserializeJson(doc, input);
-
-  // Test if parsing succeeds.
-  if (error) {
-    Serial.print(F("deserializeJson() failed: "));
-    Serial.println(error.c_str());
-    newData = false;
-    return;
-  }
-}
-
-
-
-void MotorController::processCommand(JsonVariant command) {
-  
-}
 
 void MotorController::getCommand() {
   if (newData == true) {
@@ -78,7 +63,7 @@ void MotorController::getCommand() {
     Serial.println(command);
     byte c = (byte)command;
     Serial.println(c);
-    switch(c){
+    switch (c) {
       case 48:
         Serial.println("Stop Program");
         //stopProgram();
@@ -181,7 +166,7 @@ void MotorController::mainStateLoop() {
   if (controllerActive) {
     unsigned long currentTime = millis();
     unsigned long dTime = (currentTime - previousTime);
-    if (dTime > timeInterval*1000) {
+    if (dTime > timeInterval * 1000) {
       previousTime = currentTime;
       Serial.print("Time Period: ");
       Serial.println(dTime);
@@ -270,7 +255,7 @@ void MotorController::iterateState() {
   }
   getCurrent();
   setMotorState(false);
-  
+
 }
 
 void MotorController::toggleGate() {
@@ -280,23 +265,47 @@ void MotorController::toggleGate() {
 
 void MotorController::setState() {
 
-    String command = receivedChars+2;
-    Serial.println(command);
-//  for (int i = 0; i < numberStates; i++) {
-//
-//    if (motorStates[i].sName == stateName) {
-//      Serial.println("setting motor state ");
-//
-//      motorStates[i].mSpeed = stateSpeed;
-//      Serial.print("Motor State ");
-//      Serial.println(motorStates[i].sName);
-//      Serial.println(" set with the following properties");
-//      Serial.print("Motor Speed:");
-//      Serial.println(motorStates[i].mSpeed);
-//      return;
-//    }
-//  }
-//  Serial.println("State not found");
+  char* command = receivedChars + 2;
+  Serial.println(command);
+
+  DeserializationError error = deserializeJson(doc, command);
+
+  if (error) {
+    Serial.print(F("Deserialization failed"));
+    Serial.println(error.c_str());
+    return;
+  }
+  JsonObject commandObj = doc.as<JsonObject>();
+
+  if (commandObj["name"]) {
+    String stateName = commandObj["name"].as<String>();
+    Serial.print("Setting state ");
+    Serial.println(stateName);
+    for (int i = 0; i < numberStates; i++) {
+      if (motorStates[i].sName == stateName) {
+        motorStates[i].mSpeed = commandObj["speed"].as<int>();
+        motorStates[i].sTime = commandObj["time"].as<int>();
+        motorStates[i].mDir = commandObj["dir"].as<bool>();
+        motorStates[i].gate = commandObj["gate"].as<bool>();
+        Serial.print("Motor State ");
+        Serial.print(motorStates[i].sName);
+        Serial.println(" set with the following properties");
+        Serial.print("Motor Speed:");
+        Serial.print(motorStates[i].mSpeed);
+        Serial.print(" Time:");
+        Serial.print(motorStates[i].sTime);
+        Serial.print(" Direction:");
+        Serial.print(motorStates[i].mDir);
+        Serial.print(" Gate:");
+        Serial.println(motorStates[i].gate);
+        return;
+      }
+    }
+    Serial.println("State not found");
+  } else {
+    Serial.println("Error Processing Set Command - No State Name Found");
+  }
+  //
 }
 
 
