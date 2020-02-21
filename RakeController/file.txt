@@ -1,0 +1,24 @@
+  motorStates[0] = (MotorState) {
+    10, 40, false, false, "state1"
+  };
+  motorStates[1] = (MotorState) {
+    119, 200, false, false, "state2"
+  };
+  motorStates[2] = (MotorState) {
+    496, 25, false, false, "state3"
+  };
+  motorStates[3] = (MotorState) {
+    230, 40, false, false, "state4"
+  };
+  motorStates[4] = (MotorState) {
+    64, 100, true, false, "state5"
+  };
+  motorStates[5] = (MotorState) {
+    197, 200, true, true, "state6"
+  };
+  motorStates[6] = (MotorState) {
+    180, 200, false, false, "Forward"
+  };
+  motorStates[7] = (MotorState) {
+    180, 200, true, false, "Backward"
+  };

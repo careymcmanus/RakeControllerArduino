@@ -66,11 +66,9 @@ void MotorController::getCommand() {
     switch (c) {
       case 48:
         Serial.println("Stop Program");
-        //stopProgram();
         break;
       case 49:
         Serial.println("Start Program");
-        //startProgram();
         break;
       case 50:
         Serial.println("Get States");
@@ -82,11 +80,11 @@ void MotorController::getCommand() {
         break;
       case 52:
         Serial.println("Fwd Jog");
-        jogStart(true);
+        jogStart(6);
         break;
       case 53:
         Serial.println("Back Jog");
-        jogStart(false);
+        jogStart(7);
         break;
       case 54:
         Serial.println("Stop Jog");
@@ -95,6 +93,10 @@ void MotorController::getCommand() {
       case 55:
         Serial.println("Set State");
         setState();
+        break;
+      case 56:
+        Serial.println("Change Gate");
+        toggleGateState();
         break;
       default:
         break;
@@ -112,22 +114,28 @@ void MotorController::controllerInit() {
 
 
   motorStates[0] = (MotorState) {
-    3, 50, false, false, "state1"
+    10, 40, false, false, "state1"
   };
   motorStates[1] = (MotorState) {
-    20, 180, false, false, "state2"
+    119, 200, false, false, "state2"
   };
   motorStates[2] = (MotorState) {
-    133, 200, false, false, "state3"
+    496, 25, false, false, "state3"
   };
   motorStates[3] = (MotorState) {
-    1014, 25, false, false, "state4"
+    230, 40, false, false, "state4"
   };
   motorStates[4] = (MotorState) {
-    65, 100, true, false, "state5"
+    64, 100, true, false, "state5"
   };
   motorStates[5] = (MotorState) {
     197, 200, true, true, "state6"
+  };
+  motorStates[6] = (MotorState) {
+    180, 200, false, false, "Forward"
+  };
+  motorStates[7] = (MotorState) {
+    180, 200, true, false, "Backward"
   };
   mySerial.begin(9600);
   currentState = 0;
@@ -153,12 +161,19 @@ void MotorController::interruptInit() {
 
 
 void MotorController::interruptUpdate(int speedRPM) {
-  long counter = (COUNTER_MULTIPLIER / speedRPM) - 1;
-  Serial.print("Speed: ");
-  Serial.print(speedRPM);
-  Serial.print(" Counter: ");
-  Serial.println(counter);
-  OCR1A = counter;
+  if (motorStopped) {
+    startMotor();
+  }
+  if (speedRPM > 0) {
+    long counter = (COUNTER_MULTIPLIER / speedRPM) - 1;
+    Serial.print("Speed: ");
+    Serial.print(speedRPM);
+    Serial.print(" Counter: ");
+    Serial.println(counter);
+    OCR1A = counter;
+  } else {
+    stopMotor();
+  }
 }
 
 void MotorController::mainStateLoop() {
@@ -172,9 +187,13 @@ void MotorController::mainStateLoop() {
       Serial.println(dTime);
       iterateState();
     }
-
   }
+}
 
+void MotorController::toggleGateState() {
+  Serial.println("Toggle Gate State");
+  motorStates[currentState].gate = !motorStates[currentState].gate;
+  setMotorState(false);
 }
 
 void MotorController::setMotorState(bool unpausing) {
@@ -195,6 +214,7 @@ void MotorController::stopMotor() {
   TCCR1A = 0;
   TCCR1B = 0;
   TCNT1  = 0;
+  motorStopped = true;
   Serial.println("motor off");
   digitalWrite(pulsePos, LOW);
 }
@@ -209,18 +229,20 @@ void MotorController::startProgram() {
 }
 
 void MotorController::startMotor() {
-  TCCR1B |= (1 << WGM12);
+  sei();
 
+  motorStopped = false;
   Serial.println("motor on");
 }
 
-void MotorController::jogStart(bool mDirection) {
+void MotorController::jogStart(int state) {
   pauseTime = millis();
   controllerActive = false;
+  savedState = currentState;
+  currentState = state;
+  setMotorState(false);
   Serial.print("current time interval: ");
   Serial.println(timeInterval);
-  digitalWrite(dirPos, mDirection);
-  interruptUpdate(180);
   startMotor();
 }
 
@@ -231,11 +253,12 @@ void MotorController::jogStop() {
   Serial.print(pausedTime);
   Serial.print(" New Time Interval: ");
   Serial.println(timeInterval);
-
+  currentState = savedState;
   controllerActive = true;
   setMotorState(true);
   startMotor();
 }
+
 void MotorController::printStates() {
   for (int i = 0; i < numberStates; i++) {
     Serial.println(motorStates[i].sName);
@@ -255,7 +278,6 @@ void MotorController::iterateState() {
   }
   getCurrent();
   setMotorState(false);
-
 }
 
 void MotorController::toggleGate() {
@@ -308,6 +330,9 @@ void MotorController::setState() {
   //
 }
 
+void MotorController::stopState() {
+
+}
 
 void MotorController::getCurrent() {
   String message = "<{\"current\":" + String(currentState) + "}>";

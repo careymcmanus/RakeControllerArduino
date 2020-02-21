@@ -29,8 +29,10 @@ class MotorController {
         unsigned long previousTime = 0;
         static const int numberStates = 6;
         byte pulsePos, dirPos, gateLift, gateDrop;
-        MotorState motorStates[numberStates];
+        MotorState motorStates[numberStates+2];
         int currentState;
+        int savedState;
+        bool motorStopped;
         bool controllerActive;
      
         
@@ -58,13 +60,15 @@ class MotorController {
     void stopProgram();
     void stopMotor();
     void startMotor();
-    void jogStart(bool mDirection);
+    void jogStart(int state);
     void jogStop();
     void drive();
     void iterateState();
     void updateState();
     void printStates();
     void toggleGate();
+    void toggleGateState();
+    void stopState();
     
     void setState();
     void getStates();
