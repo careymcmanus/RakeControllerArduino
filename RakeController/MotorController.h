@@ -50,11 +50,10 @@ class MotorController {
     void getCommand();
 
     void controllerInit();
-    void interruptInit();
-    void interruptUpdate(int value);
 
-    void mainStateLoop();
+    void main();
 
+    String convertSpeed(int value);
     void setMotorState(bool unpausing);
     void startProgram();
     void stopProgram();

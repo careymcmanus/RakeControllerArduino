@@ -13,6 +13,7 @@ char stateMessage[200];
 const size_t capacity = JSON_OBJECT_SIZE(5) + 40;
 StaticJsonDocument<capacity> doc;
 
+SoftwareSerial nanoSerial(4,5); //RX, TX
 SoftwareSerial mySerial(2, 3); // RX, TX
 
 MotorController::MotorController(int pulsePos, int dirPos, int gateLift, int gateDrop) {
@@ -66,9 +67,11 @@ void MotorController::getCommand() {
     switch (c) {
       case 48:
         Serial.println("Stop Program");
+        stopProgram();
         break;
       case 49:
         Serial.println("Start Program");
+        startProgram();
         break;
       case 50:
         Serial.println("Get States");
@@ -106,7 +109,9 @@ void MotorController::getCommand() {
 }
 
 void MotorController::controllerInit() {
-
+  mySerial.begin(9600);
+  nanoSerial.begin(9600);
+  
   pinMode(pulsePos, OUTPUT);
   pinMode(dirPos, OUTPUT);
   pinMode(gateLift, OUTPUT);
@@ -137,46 +142,13 @@ void MotorController::controllerInit() {
   motorStates[7] = (MotorState) {
     180, 200, true, false, "Backward"
   };
-  mySerial.begin(9600);
+  
   currentState = 0;
-  interruptInit();
   controllerActive = true;
 }
 
-void MotorController::interruptInit() {
-  //Initialize Timer1
-  cli(); //Disables all interrupts
-  TCCR1A = 0;
-  TCCR1B = 0;
-  TCNT1  = 0;
-  interruptUpdate(motorStates[currentState].mSpeed);
-  // turn on CTC mode
-  TCCR1B |= (1 << WGM12);
-  // Set CS12, CS11 and CS10 bits for 1 prescaler
-  TCCR1B |= (0 << CS12) | ( 1 << CS11) | (0 << CS10); //Prescaler for compare match register set to 128
-  // enable timer compare interrupt
-  TIMSK1 |= (1 << OCIE1A);
-  sei(); //allow interrupts
-}
 
-
-void MotorController::interruptUpdate(int speedRPM) {
-  if (motorStopped) {
-    startMotor();
-  }
-  if (speedRPM > 0) {
-    long counter = (COUNTER_MULTIPLIER / speedRPM) - 1;
-    Serial.print("Speed: ");
-    Serial.print(speedRPM);
-    Serial.print(" Counter: ");
-    Serial.println(counter);
-    OCR1A = counter;
-  } else {
-    stopMotor();
-  }
-}
-
-void MotorController::mainStateLoop() {
+void MotorController::main() {
 
   if (controllerActive) {
     unsigned long currentTime = millis();
@@ -190,33 +162,48 @@ void MotorController::mainStateLoop() {
   }
 }
 
+
 void MotorController::toggleGateState() {
   Serial.println("Toggle Gate State");
   motorStates[currentState].gate = !motorStates[currentState].gate;
   setMotorState(false);
 }
 
-void MotorController::setMotorState(bool unpausing) {
-  if (!unpausing) {
-    timeInterval = motorStates[currentState].sTime;
+/*
+ * Converts a integer value into a four digit string 
+ * ie 100 would be represented as 0100 
+ *    25 would be represented as 0025
+ */
+String MotorController::convertSpeed(int value){
+  String output = String(value);
+  String extra = "";
+  if (value < 10){
+    extra = "000";
+  } else if (value < 100) {
+    extra = "00";
+  } else if (value < 1000) {
+    extra = "0";
   }
-  interruptUpdate(motorStates[currentState].mSpeed);
-  digitalWrite(dirPos, motorStates[currentState].mDir);
+  output = extra + output;
+  return output;
+}
+
+void MotorController::setMotorState(bool unpausing) {
+  MotorState state = motorStates[currentState];
+  if (!unpausing) {
+    timeInterval = state.sTime;
+  }
+  String nanoCommand = "<2" + convertSpeed(state.mSpeed) + String(state.mDir) + ">";
+  nanoSerial.println(nanoCommand);
   digitalWrite(gateLift, motorStates[currentState].gate);
   digitalWrite(gateDrop, !motorStates[currentState].gate);
-  Serial.print("Current State: ");
-  Serial.print(motorStates[currentState].sName);
-  Serial.print(" : Motor Speed: ");
-  Serial.println(motorStates[currentState].mSpeed);
 }
 
 void MotorController::stopMotor() {
-  TCCR1A = 0;
-  TCCR1B = 0;
-  TCNT1  = 0;
   motorStopped = true;
   Serial.println("motor off");
-  digitalWrite(pulsePos, LOW);
+  nanoSerial.println("<0>");
+ 
 }
 void MotorController::stopProgram() {
   controllerActive = false;
@@ -229,10 +216,9 @@ void MotorController::startProgram() {
 }
 
 void MotorController::startMotor() {
-  sei();
-
   motorStopped = false;
   Serial.println("motor on");
+  nanoSerial.println("<1>");
 }
 
 void MotorController::jogStart(int state) {

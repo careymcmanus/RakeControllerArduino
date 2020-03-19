@@ -13,7 +13,7 @@ void setup() {
 void loop() {
   controller.recvWithStartEndMarkers();
   controller.getCommand();
-  controller.mainStateLoop();
+  controller.main();
 
 }
 
