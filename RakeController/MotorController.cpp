@@ -1,69 +1,94 @@
-#include "./MotorController.h"
-
-const unsigned long CLOCK = 16;
-const int PRESCALER = 8;
-const unsigned long RPM_CON = 75075;
-const unsigned long COUNTER_MULTIPLIER = (CLOCK*RPM_CON) / PRESCALER;
-
-const byte numChars = 128;
-char receivedChars[numChars];
-boolean newData = false;
-char stateMessage[200];
-
-const size_t capacity = JSON_OBJECT_SIZE(5) + 40;
-StaticJsonDocument<capacity> doc;
-
-SoftwareSerial mySerial(2, 3); // RX, TX
+#include "MotorController.h"
 
 MotorController::MotorController(int pulsePos, int dirPos, int gateLift, int gateDrop) {
   this->pulsePos = pulsePos;
   this->dirPos = dirPos;
   this->gateLift = gateLift;
   this->gateDrop = gateDrop;
-
 }
 
-void MotorController::recvWithStartEndMarkers() {
-  static boolean recvInProgress = false;
-  static byte ndx = 0;
-  char startMarker = '<';
-  char endMarker = '>';
-  char rc;
+void MotorController::controllerInit() {
 
-  while (mySerial.available() > 0 && newData == false) {
-    rc = mySerial.read();
+  pinMode(pulsePos, OUTPUT);
+  pinMode(dirPos, OUTPUT);
+  pinMode(gateLift, OUTPUT);
+  pinMode(gateDrop, OUTPUT);
 
-    if (recvInProgress == true) {
-      if (rc != endMarker) {
-        receivedChars[ndx] = rc;
-        ndx++;
-        if (ndx >= numChars) {
-          ndx = numChars - 1;
-        }
-      }
-      else {
-        receivedChars[ndx] = '\0'; // terminate the string
-        recvInProgress = false;
-        ndx = 0;
-        newData = true;
-      }
-    }
 
-    else if (rc == startMarker) {
-      recvInProgress = true;
+  motorStates[0] = (MotorState) {
+    10, 40, false, false, "state1"
+  };
+  motorStates[1] = (MotorState) {
+    119, 200, false, false, "state2"
+  };
+  motorStates[2] = (MotorState) {
+    496, 25, false, false, "state3"
+  };
+  motorStates[3] = (MotorState) {
+    230, 40, false, false, "state4"
+  };
+  motorStates[4] = (MotorState) {
+    64, 100, true, false, "state5"
+  };
+  motorStates[5] = (MotorState) {
+    197, 200, true, true, "state6"
+  };
+  motorStates[6] = (MotorState) {
+    180, 200, false, false, "Forward"
+  };
+  motorStates[7] = (MotorState) {
+    180, 200, true, false, "Backward"
+  };
+  
+  currentState = 0;
+  cmdProc.initSerial();
+  interruptInit();
+  controllerActive = true;
+}
+
+void MotorController::interruptInit() {
+  //Initialize Timer1
+  cli(); //Disables all interrupts
+  TCCR1A = 0;
+  TCCR1B = 0;
+  TCNT1  = 0;
+  interruptUpdate(motorStates[currentState].mSpeed);
+  // turn on CTC mode
+  TCCR1B |= (1 << WGM12);
+  // Set CS12, CS11 and CS10 bits for 1 prescaler
+  TCCR1B |= (0 << CS12) | ( 1 << CS11) | (0 << CS10); //Prescaler for compare match register set to 128
+  // enable timer compare interrupt
+  TIMSK1 |= (1 << OCIE1A);
+  sei(); //allow interrupts
+}
+
+void MotorController::interruptUpdate(int speedRPM) {
+  if (motorStopped) {
+    startMotor();
+  }
+  if (speedRPM > 0) {
+    long counter = (COUNTER_MULTIPLIER / speedRPM) - 1;
+    OCR1A = counter;
+  } else {
+    stopMotor();
+  }
+}
+
+void MotorController::mainStateLoop() {
+
+  if (controllerActive) {
+    unsigned long currentTime = millis();
+    unsigned long dTime = (currentTime - previousTime);
+    if (dTime > timeInterval * 1000) {
+      previousTime = currentTime;
+      iterateState();
     }
   }
 }
 
-
 void MotorController::getCommand() {
-  if (newData == true) {
-    //USerial.println(receivedChars);
-    char command = receivedChars[0];
-    Serial.println(command);
-    byte c = (byte)command;
-    Serial.println(c);
-    switch (c) {
+  uint8_t cmd = cmdProc.getCmd();
+    switch (cmd) {
       case 48:
         Serial.println("Stop Program");
         break;
@@ -101,94 +126,7 @@ void MotorController::getCommand() {
       default:
         break;
     }
-    newData = false;
   }
-}
-
-void MotorController::controllerInit() {
-
-  pinMode(pulsePos, OUTPUT);
-  pinMode(dirPos, OUTPUT);
-  pinMode(gateLift, OUTPUT);
-  pinMode(gateDrop, OUTPUT);
-
-
-  motorStates[0] = (MotorState) {
-    10, 40, false, false, "state1"
-  };
-  motorStates[1] = (MotorState) {
-    119, 200, false, false, "state2"
-  };
-  motorStates[2] = (MotorState) {
-    496, 25, false, false, "state3"
-  };
-  motorStates[3] = (MotorState) {
-    230, 40, false, false, "state4"
-  };
-  motorStates[4] = (MotorState) {
-    64, 100, true, false, "state5"
-  };
-  motorStates[5] = (MotorState) {
-    197, 200, true, true, "state6"
-  };
-  motorStates[6] = (MotorState) {
-    180, 200, false, false, "Forward"
-  };
-  motorStates[7] = (MotorState) {
-    180, 200, true, false, "Backward"
-  };
-  mySerial.begin(9600);
-  currentState = 0;
-  interruptInit();
-  controllerActive = true;
-}
-
-void MotorController::interruptInit() {
-  //Initialize Timer1
-  cli(); //Disables all interrupts
-  TCCR1A = 0;
-  TCCR1B = 0;
-  TCNT1  = 0;
-  interruptUpdate(motorStates[currentState].mSpeed);
-  // turn on CTC mode
-  TCCR1B |= (1 << WGM12);
-  // Set CS12, CS11 and CS10 bits for 1 prescaler
-  TCCR1B |= (0 << CS12) | ( 1 << CS11) | (0 << CS10); //Prescaler for compare match register set to 128
-  // enable timer compare interrupt
-  TIMSK1 |= (1 << OCIE1A);
-  sei(); //allow interrupts
-}
-
-
-void MotorController::interruptUpdate(int speedRPM) {
-  if (motorStopped) {
-    startMotor();
-  }
-  if (speedRPM > 0) {
-    long counter = (COUNTER_MULTIPLIER / speedRPM) - 1;
-    Serial.print("Speed: ");
-    Serial.print(speedRPM);
-    Serial.print(" Counter: ");
-    Serial.println(counter);
-    OCR1A = counter;
-  } else {
-    stopMotor();
-  }
-}
-
-void MotorController::mainStateLoop() {
-
-  if (controllerActive) {
-    unsigned long currentTime = millis();
-    unsigned long dTime = (currentTime - previousTime);
-    if (dTime > timeInterval * 1000) {
-      previousTime = currentTime;
-      Serial.print("Time Period: ");
-      Serial.println(dTime);
-      iterateState();
-    }
-  }
-}
 
 void MotorController::toggleGateState() {
   Serial.println("Toggle Gate State");
@@ -211,6 +149,7 @@ void MotorController::setMotorState(bool unpausing) {
 }
 
 void MotorController::stopMotor() {
+  //TODO Redo this to work by setting the motor controller enable pin low
   TCCR1A = 0;
   TCCR1B = 0;
   TCNT1  = 0;
@@ -218,6 +157,7 @@ void MotorController::stopMotor() {
   Serial.println("motor off");
   digitalWrite(pulsePos, LOW);
 }
+
 void MotorController::stopProgram() {
   controllerActive = false;
   stopMotor();
@@ -229,8 +169,8 @@ void MotorController::startProgram() {
 }
 
 void MotorController::startMotor() {
+  //TODO Rewrite to set motor controller enable pin HIGH
   sei();
-
   motorStopped = false;
   Serial.println("motor on");
 }
@@ -241,16 +181,14 @@ void MotorController::jogStart(int state) {
   savedState = currentState;
   currentState = state;
   setMotorState(false);
-  Serial.print("current time interval: ");
-  Serial.println(timeInterval);
   startMotor();
 }
 
 void MotorController::jogStop() {
-  unsigned long pausedTime = (millis() - pauseTime) / 1000; // /1000 to convert to seconds
+  uint64_t pausedTime = (millis() - pauseTime) / 1000; // /1000 to convert to seconds
   timeInterval += (pausedTime);
   Serial.print("paused time: ");
-  Serial.print(pausedTime);
+  Serial.print((long) pausedTime);
   Serial.print(" New Time Interval: ");
   Serial.println(timeInterval);
   currentState = savedState;
@@ -264,10 +202,8 @@ void MotorController::printStates() {
     Serial.println(motorStates[i].sName);
   }
 }
+
 void MotorController::drive() {
-  digitalWrite(gateLift, motorStates[currentState].gate);
-  digitalWrite(gateDrop, !motorStates[currentState].gate);
-  digitalWrite(dirPos, motorStates[currentState].mDir);
   digitalWrite(pulsePos, !digitalRead(pulsePos));
 }
 
@@ -286,48 +222,19 @@ void MotorController::toggleGate() {
 }
 
 void MotorController::setState() {
-
-  char* command = receivedChars + 2;
-  Serial.println(command);
-
-  DeserializationError error = deserializeJson(doc, command);
-
-  if (error) {
-    Serial.print(F("Deserialization failed"));
-    Serial.println(error.c_str());
-    return;
-  }
-  JsonObject commandObj = doc.as<JsonObject>();
-
-  if (commandObj["name"]) {
-    String stateName = commandObj["name"].as<String>();
-    Serial.print("Setting state ");
-    Serial.println(stateName);
+    MotorState toSetState = cmdProc.getMotorState();
     for (int i = 0; i < numberStates; i++) {
-      if (motorStates[i].sName == stateName) {
-        motorStates[i].mSpeed = commandObj["speed"].as<int>();
-        motorStates[i].sTime = commandObj["time"].as<int>();
-        motorStates[i].mDir = commandObj["dir"].as<bool>();
-        motorStates[i].gate = commandObj["gate"].as<bool>();
-        Serial.print("Motor State ");
-        Serial.print(motorStates[i].sName);
-        Serial.println(" set with the following properties");
-        Serial.print("Motor Speed:");
-        Serial.print(motorStates[i].mSpeed);
-        Serial.print(" Time:");
-        Serial.print(motorStates[i].sTime);
-        Serial.print(" Direction:");
-        Serial.print(motorStates[i].mDir);
-        Serial.print(" Gate:");
-        Serial.println(motorStates[i].gate);
+      if (motorStates[i].sName == toSetState.sName) {
+        motorStates[i].mSpeed = toSetState.mSpeed;
+        motorStates[i].sTime = toSetState.sName;
+        motorStates[i].mDir = toSetState.mDir;
+        motorStates[i].gate = toSetState.gate;
+
+        printSetState(motorStates[i]);
         return;
       }
     }
-    Serial.println("State not found");
-  } else {
-    Serial.println("Error Processing Set Command - No State Name Found");
-  }
-  //
+
 }
 
 void MotorController::stopState() {
@@ -336,21 +243,23 @@ void MotorController::stopState() {
 
 void MotorController::getCurrent() {
   String message = "<{\"current\":" + String(currentState) + "}>";
-  mySerial.println(message);
+  cmdProc.sendCmd(message);
 }
 
 void MotorController::getStates() {
-
-  mySerial.print("<{\"states\":[");
+  String msg = "<{\"states\":[";
   for (int i = 0; i < numberStates; i++) {
-    mySerial.print("{\"name\":" + motorStates[i].sName);
-    mySerial.print(",\"speed\":" + String(motorStates[i].mSpeed));
-    mySerial.print(",\"time\":" + String(motorStates[i].sTime));
-    mySerial.print(",\"direction\":" + String(motorStates[i].mDir));
-    mySerial.print(",\"gate\":" + String(motorStates[i].gate) + "}");
+    msg += "{\"name\":" + String(motorStates[i].sName) +
+              ",\"speed\":" + String(motorStates[i].mSpeed) +
+              ",\"time\":" + String(motorStates[i].sTime) +
+              ",\"direction\":" + String(motorStates[i].mDir) +
+              ",\"gate\":" + String(motorStates[i].gate) + "}";
     if (i < numberStates - 1) {
-      mySerial.print(",");
+      msg += ",";
     }
   }
-  mySerial.println("]}>");
+  msg += "]}>";
+  Serial.print("Message: ");
+  Serial.println(msg);
+  cmdProc.sendCmd(msg);
 }
