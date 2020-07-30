@@ -14,34 +14,7 @@ void MotorController::controllerInit() {
   pinMode(gateLift, OUTPUT);
   pinMode(gateDrop, OUTPUT);
 
-
-  motorStates[0] = (MotorState) {
-    10, 40, false, false, "state1"
-  };
-  motorStates[1] = (MotorState) {
-    119, 200, false, false, "state2"
-  };
-  motorStates[2] = (MotorState) {
-    496, 25, false, false, "state3"
-  };
-  motorStates[3] = (MotorState) {
-    230, 40, false, false, "state4"
-  };
-  motorStates[4] = (MotorState) {
-    64, 100, true, false, "state5"
-  };
-  motorStates[5] = (MotorState) {
-    197, 200, true, true, "state6"
-  };
-  motorStates[6] = (MotorState) {
-    180, 200, false, false, "Forward"
-  };
-  motorStates[7] = (MotorState) {
-    180, 200, true, false, "Backward"
-  };
-  
   currentState = 0;
-  cmdProc.initSerial();
   interruptInit();
   controllerActive = true;
 }
@@ -87,7 +60,7 @@ void MotorController::mainStateLoop() {
 }
 
 void MotorController::getCommand() {
-  uint8_t cmd = cmdProc.getCmd();
+  uint8_t cmd = cmdProc->getCmd();
     switch (cmd) {
       case 48:
         Serial.println("Stop Program");
@@ -222,7 +195,7 @@ void MotorController::toggleGate() {
 }
 
 void MotorController::setState() {
-    MotorState toSetState = cmdProc.getMotorState();
+    MotorState toSetState = cmdProc->getMotorState();
     for (int i = 0; i < numberStates; i++) {
       if (motorStates[i].sName == toSetState.sName) {
         motorStates[i].mSpeed = toSetState.mSpeed;
@@ -243,7 +216,7 @@ void MotorController::stopState() {
 
 void MotorController::getCurrent() {
   String message = "<{\"current\":" + String(currentState) + "}>";
-  cmdProc.sendCmd(message);
+  cmdProc->sendCmd(message);
 }
 
 void MotorController::getStates() {
@@ -261,5 +234,5 @@ void MotorController::getStates() {
   msg += "]}>";
   Serial.print("Message: ");
   Serial.println(msg);
-  cmdProc.sendCmd(msg);
+  cmdProc->sendCmd(msg);
 }

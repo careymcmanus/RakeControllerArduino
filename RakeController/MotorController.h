@@ -7,7 +7,7 @@
     Created by Carey McManus
 */
 
-#include <Arduino.h>
+
 #include "MotorState.h"
 #include "CmdProc.h"
 
@@ -19,7 +19,7 @@ const unsigned long COUNTER_MULTIPLIER = (CLOCK * RPM_CON) / PRESCALER;
 class MotorController
 {
 private:
-    CmdProc cmdProc = CmdProc();
+    CmdProc *cmdProc;
     unsigned long timeInterval;
     unsigned long pauseTime;
     unsigned long previousTime = 0;

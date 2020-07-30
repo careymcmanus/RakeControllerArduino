@@ -1,10 +1,10 @@
 #include "CmdProc.h"
 
-CmdProc::CmdProc(){
+CmdProc::CmdProc(SoftwareSerial *ss, uint32_t baud){
+  softSerial = ss;
+  softSerial->begin(baud);
 }
-void CmdProc::initSerial(){
-   
-}
+
 void CmdProc::sendCmd(String msg){
    
 }
@@ -24,7 +24,7 @@ MotorState CmdProc::getMotorState(){
     if (error) {
         Serial.print(F("Deserialization Failed: "));
         Serial.println(error.c_str());
-        return;
+        
     }
     JsonObject cmdObj = jDoc.as<JsonObject>();
 
@@ -38,5 +38,5 @@ MotorState CmdProc::getMotorState(){
         return mState;
     }
     Serial.println("Error Proccessing Set Command: No State Name Found");
-    return;
+    
 }
