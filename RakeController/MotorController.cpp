@@ -1,233 +1,256 @@
 #include "MotorController.h"
 
-MotorController::MotorController(int pulsePos, int dirPos, int gateLift, int gateDrop) {
-  this->pulsePos = pulsePos;
-  this->dirPos = dirPos;
-  this->gateLift = gateLift;
-  this->gateDrop = gateDrop;
+
+MotorController::MotorController(OutPinArray *drvPins,
+                                 BtnProc *bP, CmdProc *cP, rakePrg *prgms)
+{
+  drivePins = drvPins;
+  cmdProc = cP;
+  btnProc = bP;
+  prgmData = prgms; 
+  prgNo = 0;
+  numSts = prgmData[prgNo].numSts;
+  cStateData = prgmData[prgNo].states;
+  cState = 0;
+  sState = 0;
+  tempState = MotorState(DEFAULT_MSTATE);
 }
 
-void MotorController::controllerInit() {
+void MotorController::controllerInit()
+{
 
-  pinMode(pulsePos, OUTPUT);
-  pinMode(dirPos, OUTPUT);
-  pinMode(gateLift, OUTPUT);
-  pinMode(gateDrop, OUTPUT);
+  pinMode(drivePins->plsPin, OUTPUT);
+  pinMode(drivePins->dirPin, OUTPUT);
+  pinMode(drivePins->gLiftPin, OUTPUT);
+  pinMode(drivePins->gDropPin, OUTPUT);
+  pinMode(drivePins->mEnable, OUTPUT);
 
-  currentState = 0;
-  interruptInit();
-  controllerActive = true;
+  controllerActive = false;
+  btnProc->initProc(&btnFlags);
+  initInterrupt();
 }
 
-void MotorController::interruptInit() {
-  //Initialize Timer1
-  cli(); //Disables all interrupts
-  TCCR1A = 0;
-  TCCR1B = 0;
-  TCNT1  = 0;
-  interruptUpdate(motorStates[currentState].mSpeed);
-  // turn on CTC mode
-  TCCR1B |= (1 << WGM12);
-  // Set CS12, CS11 and CS10 bits for 1 prescaler
-  TCCR1B |= (0 << CS12) | ( 1 << CS11) | (0 << CS10); //Prescaler for compare match register set to 128
-  // enable timer compare interrupt
-  TIMSK1 |= (1 << OCIE1A);
-  sei(); //allow interrupts
+/*
+* Initialise the Timer 2 Interrupt
+* Sets the mode of operation of Timer 2
+*/
+void MotorController::initInterrupt()
+{
+  //Clear registers to ensure correct settings
+  TCCR2A = CLEAR_REGISTER; 
+  TCCR2B = CLEAR_REGISTER;
+
+  // Set the Timer/Counter Control 2A Register
+  // to Clear Timer on Compare match mode (CTC)
+  TCCR1A |= (1 << WGM12);
+
+  // Set the Timer/Counter Control 2B Register prescaler
+  // counter will use count times of clk_i/o/8
+  TCCR1B |= (0 << CS12) | (1 << CS11) | (0 << CS10); 
 }
 
-void MotorController::interruptUpdate(int speedRPM) {
-  if (motorStopped) {
-    startMotor();
-  }
-  if (speedRPM > 0) {
-    long counter = (COUNTER_MULTIPLIER / speedRPM) - 1;
-    OCR1A = counter;
-  } else {
-    stopMotor();
-  }
-}
 
-void MotorController::mainStateLoop() {
-
-  if (controllerActive) {
+/*
+*
+*/
+void MotorController::main()
+{
+  getCommand();// check for any commands that may have been sent
+  btnProc->getFlags(); // check for any buttons that may have been pressed
+  consumeFlags();
+  if (controllerActive)
+  {
     unsigned long currentTime = millis();
     unsigned long dTime = (currentTime - previousTime);
-    if (dTime > timeInterval * 1000) {
-      previousTime = currentTime;
+    if (dTime > timeInterval * 1000)
+    {
       iterateState();
+      previousTime = currentTime;
     }
+  }
+  
+}
+
+void MotorController::consumeFlags(){
+  // Check flag for limit switch 1
+  if (btnFlags & 1) {
+    Serial.println("Limit Switch 1 pressed");
+    btnFlags &= ~1;
+  }
+  // Check flag for limit switch 2
+  if (btnFlags & (1 << 1)){
+    Serial.println("Limit Switch 2 pressed");
+    btnFlags &= ~(1 << 1);
   }
 }
 
-void MotorController::getCommand() {
-  uint8_t cmd = cmdProc->getCmd();
-    switch (cmd) {
-      case 48:
-        Serial.println("Stop Program");
-        break;
-      case 49:
-        Serial.println("Start Program");
-        break;
-      case 50:
-        Serial.println("Get States");
-        getStates();
-        break;
-      case 51:
-        Serial.println("Get Current");
-        getCurrent();
-        break;
-      case 52:
-        Serial.println("Fwd Jog");
-        jogStart(6);
-        break;
-      case 53:
-        Serial.println("Back Jog");
-        jogStart(7);
-        break;
-      case 54:
-        Serial.println("Stop Jog");
-        jogStop();
-        break;
-      case 55:
-        Serial.println("Set State");
-        setState();
-        break;
-      case 56:
-        Serial.println("Change Gate");
-        toggleGateState();
-        break;
-      default:
-        break;
-    }
-  }
 
-void MotorController::toggleGateState() {
+
+void MotorController::drive()
+{
+  // Set Timer/Counter Control 1A Register
+  // COM2A bits to Toggle OCRA on compare match
+  // (PIN 11 on Arduino UNO)
+  TCCR1A |= (1 << COM2A0);
+  sei();
+}
+
+void MotorController::drvSpdUpdt()
+{
+    if (cStateData[cState]->mSpeed > 0)
+  {
+    uint16_t counter = (COUNTER_MULTIPLIER / speedRPM) - 1;
+    OCR2A = counter;
+  }
+  else
+  {
+    stopMotor;
+  }
+}
+
+void MotorController::toggleGateState()
+{
   Serial.println("Toggle Gate State");
-  motorStates[currentState].gate = !motorStates[currentState].gate;
+  cStateData[cState].gate = !cStateData[cState].gate;
   setMotorState(false);
 }
 
-void MotorController::setMotorState(bool unpausing) {
-  if (!unpausing) {
-    timeInterval = motorStates[currentState].sTime;
+void MotorController::setMotorState(bool unpausing)
+{
+  if (!unpausing)
+  {
+    timeInterval = cStateData[cState].sTime;
   }
-  interruptUpdate(motorStates[currentState].mSpeed);
-  digitalWrite(dirPos, motorStates[currentState].mDir);
-  digitalWrite(gateLift, motorStates[currentState].gate);
-  digitalWrite(gateDrop, !motorStates[currentState].gate);
+  digitalWrite(drivePins->dirPin, cStateData[cState].mDir);
+  digitalWrite(drivePins->gLiftPin, cStateData[cState].gate);
+  digitalWrite(drivePins->gDropPin, !cStateData[cState].gate);
+  interruptUpdate(cStateData[cState].mSpeed);
   Serial.print("Current State: ");
-  Serial.print(motorStates[currentState].sName);
+  Serial.print(cStateData[cState].sName);
   Serial.print(" : Motor Speed: ");
-  Serial.println(motorStates[currentState].mSpeed);
+  Serial.println(cStateData[cState].mSpeed);
 }
 
-void MotorController::stopMotor() {
+void MotorController::stopMotor()
+{
   //TODO Redo this to work by setting the motor controller enable pin low
-  TCCR1A = 0;
-  TCCR1B = 0;
-  TCNT1  = 0;
-  motorStopped = true;
+
+  mtrStpd = true;
   Serial.println("motor off");
-  digitalWrite(pulsePos, LOW);
+  digitalWrite(drivePins->plsPin, LOW);
 }
 
-void MotorController::stopProgram() {
+void MotorController::stopProgram()
+{
   controllerActive = false;
   stopMotor();
 }
 
-void MotorController::startProgram() {
+void MotorController::startProgram()
+{
   controllerActive = true;
   startMotor();
 }
 
-void MotorController::startMotor() {
+void MotorController::startMotor()
+{
   //TODO Rewrite to set motor controller enable pin HIGH
   sei();
-  motorStopped = false;
+  mtrStpd = false;
   Serial.println("motor on");
 }
 
-void MotorController::jogStart(int state) {
+void MotorController::jogStart(int state)
+{
   pauseTime = millis();
   controllerActive = false;
-  savedState = currentState;
-  currentState = state;
+  sState = cState;
+  cState = state;
   setMotorState(false);
   startMotor();
 }
 
-void MotorController::jogStop() {
+void MotorController::jogStop()
+{
   uint64_t pausedTime = (millis() - pauseTime) / 1000; // /1000 to convert to seconds
   timeInterval += (pausedTime);
   Serial.print("paused time: ");
-  Serial.print((long) pausedTime);
+  Serial.print((long)pausedTime);
   Serial.print(" New Time Interval: ");
   Serial.println(timeInterval);
-  currentState = savedState;
+  cState = sState;
   controllerActive = true;
   setMotorState(true);
   startMotor();
 }
 
-void MotorController::printStates() {
-  for (int i = 0; i < numberStates; i++) {
-    Serial.println(motorStates[i].sName);
+void MotorController::printStates()
+{
+  for (int i = 0; i < 6; i++)
+  {
+    Serial.println(cStateData[i].sName);
   }
 }
 
-void MotorController::drive() {
-  digitalWrite(pulsePos, !digitalRead(pulsePos));
-}
 
-void MotorController::iterateState() {
-  currentState++;
-  if (currentState == numberStates) {
-    currentState = 0;
+void MotorController::iterateState()
+{
+  cState++;
+  if (cState == numSts)
+  {
+    cState = 0;
   }
   getCurrent();
   setMotorState(false);
 }
 
-void MotorController::toggleGate() {
-  digitalWrite(gateLift, !digitalRead(gateLift));
-  digitalWrite(gateDrop, !digitalRead(gateDrop));
+void MotorController::toggleGate()
+{
+  digitalWrite(drivePins->gLiftPin, !digitalRead(drivePins->gLiftPin));
+  digitalWrite(drivePins->gDropPin, !digitalRead(drivePins->gDropPin));
 }
 
-void MotorController::setState() {
-    MotorState toSetState = cmdProc->getMotorState();
-    for (int i = 0; i < numberStates; i++) {
-      if (motorStates[i].sName == toSetState.sName) {
-        motorStates[i].mSpeed = toSetState.mSpeed;
-        motorStates[i].sTime = toSetState.sName;
-        motorStates[i].mDir = toSetState.mDir;
-        motorStates[i].gate = toSetState.gate;
+void MotorController::setState()
+{
+  cmdProc->getMotorState(&tempState);
 
-        printSetState(motorStates[i]);
-        return;
-      }
+  for (int i = 0; i < 6; i++)
+  {
+    if (cStateData[i].sName == tempState.sName)
+    {
+      cStateData[i].mSpeed = tempState.mSpeed;
+      cStateData[i].sTime = tempState.sName;
+      cStateData[i].mDir = tempState.mDir;
+      cStateData[i].gate = tempState.gate;
+
+      printSetState(cStateData[i]);
+      return;
     }
-
+  }
 }
 
-void MotorController::stopState() {
-
+void MotorController::stopState()
+{
 }
 
-void MotorController::getCurrent() {
-  String message = "<{\"current\":" + String(currentState) + "}>";
+void MotorController::getCurrent()
+{
+  String message = "<{\"current\":" + String(cState) + "}>";
   cmdProc->sendCmd(message);
 }
 
-void MotorController::getStates() {
+void MotorController::getStates()
+{
   String msg = "<{\"states\":[";
-  for (int i = 0; i < numberStates; i++) {
-    msg += "{\"name\":" + String(motorStates[i].sName) +
-              ",\"speed\":" + String(motorStates[i].mSpeed) +
-              ",\"time\":" + String(motorStates[i].sTime) +
-              ",\"direction\":" + String(motorStates[i].mDir) +
-              ",\"gate\":" + String(motorStates[i].gate) + "}";
-    if (i < numberStates - 1) {
+  for (int i = 0; i < 6; i++)
+  {
+    msg += "{\"name\":" + String(cStateData[i].sName) +
+           ",\"speed\":" + String(cStateData[i].mSpeed) +
+           ",\"time\":" + String(cStateData[i].sTime) +
+           ",\"direction\":" + String(cStateData[i].mDir) +
+           ",\"gate\":" + String(cStateData[i].gate) + "}";
+    if (i < 6 - 1)
+    {
       msg += ",";
     }
   }
