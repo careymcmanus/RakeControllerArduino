@@ -24,10 +24,6 @@ void setup() {
 }
 
 void loop() {
-  controller.mainStateLoop();
+  controller.main();
 }
 
-ISR(TIMER1_COMPA_vect) {
-  //interrupt commands for TIMER 1 here
-  //controller.drive();
-}

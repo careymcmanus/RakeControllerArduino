@@ -26,9 +26,10 @@ private:
     BtnProc *btnProc;
     uint8_t btnFlags =0x00;
 
-    unsigned long timeInterval;
-    unsigned long pauseTime;
-    unsigned long previousTime = 0;
+    uint64_t timeInterval;
+    uint64_t pauseTime;
+    uint64_t previousTime = 0;
+    bool paused = false;
 
     OutPinArray *drivePins;
 
@@ -39,38 +40,10 @@ private:
     MotorState tempState;
     uint8_t numSts;
     uint8_t cState;
-    uint8_t sState;
 
     bool mtrStpd;
     bool controllerActive;
 
-    void updateStateData()
-    {
-        numSts = prgmData[prgNo].numSts;
-        cStateData = prgmData[prgNo].states;
-    }
-    void printBinary(uint8_t number)
-    {
-        for (int i = 0; i < 8; i++)
-        {
-            Serial.print(bitRead(number, i));
-        }
-        Serial.println();
-    }
-    void printSetState(MotorState state)
-    {
-        Serial.print("Motor State ");
-        Serial.print(state.sName);
-        Serial.println(" set with the following properties");
-        Serial.print("Motor Speed:");
-        Serial.print(state.mSpeed);
-        Serial.print(" Time:");
-        Serial.print(state.sTime);
-        Serial.print(" Direction:");
-        Serial.print(state.mDir);
-        Serial.print(" Gate:");
-        Serial.println(state.gate);
-    }
 
     void MotorController::getCommand()
     {
@@ -113,7 +86,6 @@ private:
                 break;
             case 56:
                 Serial.println("Change Gate");
-                toggleGateState();
                 break;
             default:
                 break;
@@ -124,33 +96,38 @@ private:
 public:
     MotorController(OutPinArray *drvPins, BtnProc *bP, CmdProc *cP, rakePrg *prgms);
 
-    /*
-     * Functions for processing incoming commands
-     */
-
+    //Initialiser Functions
     void controllerInit();
-    void interruptInit();
-    void interruptUpdate(int value);
+    void initInterrupt();
 
-    void mainStateLoop();
-    void consumeFlags();
-    void setMotorState(bool unpausing);
+    //Update Functions
+    void updateStateData();
+    void drvSpdUPdt(uint16_t speed);
+    void updtStateProps();
+    
+    //Start/Stop Functions
     void startProgram();
     void stopProgram();
-    void stopMotor();
     void startMotor();
-    void jogStart(int state);
-    void jogStop();
-    void drive();
-    void iterateState();
-    void updateState();
-    void printStates();
-    void toggleGate();
-    void toggleGateState();
-    void stopState();
+    void stopMotor();
 
+    //Main calling functions
+    void main();
+    void consumeFlags();
+
+    //Control Functions
+    void jogStart(bool dir);
+    void jogStop();
+    void iterateState();
+    void toggleGate();
+
+    //Cmd Interface Functions
     void setState();
     void getStates();
     void getCurrent();
+
+    //Serial Monitor Functions
+    void printStatus();
+    void printSetState(uint8_t stateNum);
 };
 #endif
