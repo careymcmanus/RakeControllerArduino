@@ -33,7 +33,6 @@ void MotorController::initInterrupt()
   // counter will use count times of clk_i/o/8
   TCCR1B |= (0 << CS12) | (1 << CS11) | (0 << CS10); 
   // Enable all Interrupts 
-  
   sei(); 
 }
 
@@ -45,7 +44,7 @@ void MotorController::updateStateData(){
 
 void MotorController::updateStateProperties()
 {
-  if (stateFlags & ~(1 << PAUSED))
+  if (stateFlags & (0 << PAUSED))
   {
     timeInterval = cStateData[cState].Time;
   }
@@ -60,8 +59,7 @@ void MotorController::updateSpeed(uint16_t speed)
 {
     if (speed >0)
   { 
-    OCR1B = (COUNTER_MULTIPLIER / speed) - 1;
-    OCR1A = (COUNTER_MULTIPLIER / speed) - 1;
+    OCR2A = (COUNTER_MULTIPLIER / speed) - 1;
   }
   else
   {
@@ -77,7 +75,7 @@ void MotorController::startProgram()
 
 void MotorController::stopProgram()
 {
-  stateFlags &= ~(1 << CONTROLLER_ACTIVE);
+  stateFlags &= (0 << CONTROLLER_ACTIVE);
   stopMotor();
 }
 /*
@@ -92,7 +90,6 @@ void MotorController::startMotor()
   digitalWrite(drvPins.EN, HIGH);
   stateFlags |= (1 << MOTOR_ACTIVE);
   TCCR1A |= (1 << COM1A0);
-  TIMSK1 |= (1 << OCIE1A);
   printStatus();
 }
 }
@@ -105,7 +102,7 @@ void MotorController::startMotor()
 void MotorController::stopMotor()
 {
   if (stateFlags & (1 << MOTOR_ACTIVE)){
-  TCCR1A &= ~(1 << COM1A0);
+  TCCR1A |= (0 << COM1A0);
   stateFlags |= ~(1 << MOTOR_ACTIVE);
   printStatus();
   digitalWrite(drvPins.EN, LOW);
@@ -138,24 +135,28 @@ void MotorController::main()
 void MotorController::consumeFlags(){
   // Check flag for limit switch 1
   if (btnFlags & (1 << LIMIT_SWITCH_1)) {
-      if (stateFlags & (1 << RECAL_TO_START)){
-      jogStop();
-      stateFlags &= ~(1 < RECAL_TO_START);
+    if (stateFlags & (1 << RECAL_TO_START)){
+      stopMotor();
+      cState = 0;
+      updateStateProperties();
+      stateFlags &= (0 < RECAL_TO_START);
       Serial.println("At Start!");
     }
     stateFlags |= (1 << START_POSITION);
-    btnFlags &= ~(1 << LIMIT_SWITCH_1);
+    btnFlags &= (0 << LIMIT_SWITCH_1);
     Serial.println("Limit Switch 1 pressed");
   }
   // Check flag for limit switch 2
   if (btnFlags & (1 << LIMIT_SWITCH_2)){
     if (stateFlags & (1 << RECAL_TO_END)){
-      jogStop();
-      stateFlags &= ~(1 < RECAL_TO_END);
+      stopMotor();
+      cState = 4;
+      updateStateProperties();
+      stateFlags &= (0 < RECAL_TO_END);
       Serial.println("At End!");
     }
     stateFlags |= (1 << END_POSITION);
-    btnFlags &= ~(1 << LIMIT_SWITCH_2);
+    btnFlags &= (0 << LIMIT_SWITCH_2);
     Serial.println("Limit Switch 2 pressed");
   }
 }
@@ -169,10 +170,10 @@ void MotorController::consumeFlags(){
 void MotorController::jogStart(char dir)
 {
   pauseTime = millis();
-  stateFlags |= (1 << PAUSED);
+  stateFlags &= (1 << PAUSED);
   stopMotor();
   digitalWrite(drvPins.Dir, dir);
-  stateFlags &= ~(1 << CONTROLLER_ACTIVE);
+  stateFlags &= (0 << CONTROLLER_ACTIVE);
   updateSpeed(150);
   startMotor();
 }
@@ -182,29 +183,14 @@ void MotorController::jogStop()
   stopMotor();
   //Add the pause time to the timeInterval
   timeInterval += (millis() - pauseTime)/1000;
-  stateFlags |= (1 << CONTROLLER_ACTIVE);
+  stateFlags &= (1 << CONTROLLER_ACTIVE);
   updateStateProperties();
   startMotor();
 }
 
-/*
- * Send Rake to the Limits of Systems
- * @param limit: which limit to send it
- * TODO: add in error messages
- */
-void MotorController::sendToLimit(char limit){
-  if (limit == START){
-    stateFlags |= (1 << RECAL_TO_START);
-  } else if (limit == END){
-    stateFlags |= (1 << RECAL_TO_END);
-  } else {
-    return;
-  }
-  jogStart(limit);
-  printBinary(stateFlags);
-  // Turn off paused because current state will be reset
-  stateFlags &= ~(1 << PAUSED); 
-  printBinary(stateFlags);
+void MotorController::goToStart(){
+  stateFlags |= (1 << RECAL_TO_START);
+  jogStart(BACKWARD);
 }
 
 void MotorController::iterateState()
@@ -233,7 +219,7 @@ int MotorController::checkMsg(){
     if (cmdFlags & (1 << RCV_IN_PROG)){
       if (rc == END_MARK){
         rcvMsg[index] = '\0';
-        cmdFlags &= ~(1 << RCV_IN_PROG);
+        cmdFlags &= (0 << RCV_IN_PROG);
         cmdFlags |= (1 << NEW_MSG);
         index = 0;
         return 1;
@@ -241,7 +227,7 @@ int MotorController::checkMsg(){
         rcvMsg[index] = rc;
         index++;
         if (index >= NUM_CHARS){
-          cmdFlags &=~(1 << RCV_IN_PROG);
+          cmdFlags &=(0 << RCV_IN_PROG);
           return -1;
         }
       }
@@ -251,26 +237,34 @@ int MotorController::checkMsg(){
   }
 }
 
-/*
- * Calls checkMsg and then if New Msg  
- * Calls function to process Msg
- * TODO add in error Handling
- */
 int MotorController::checkCmd(){
+    int err;
     checkMsg();
     if(cmdFlags & (1 << NEW_MSG)){
       Serial.print("MSG RCVD: ");
       Serial.println(rcvMsg);
-      processCmd();
-      cmdFlags &= ~(1 << NEW_MSG);
+      err = processCmd();
+      switch (err)
+      {
+      case 1:
+        /* Command Processed */
+        break;
+      case -1:
+        /* No Command Found */
+        sendCmd("No Command Found");
+      case -2:
+        /* No Valid Command Found */
+        sendCmd("No Valid Command Found");
+      default:
+        break;
+      }
+      cmdFlags &= (0 << NEW_MSG);
       return 1;
     }
     return 0;
 }
-/*
- * Processes Cmds
- * TODO add in error codes
- */
+
+//Todo use flags for faults
 int MotorController::processCmd(){
         if (rcvMsg[0] >0)
         {
@@ -278,52 +272,44 @@ int MotorController::processCmd(){
             Serial.println((int) rcvMsg[0]);
             switch ((int)rcvMsg[0])
             {
-            case ZERO:
+            case 48:
                 Serial.println("Stop Program");
                 stopProgram();
                 break;
-            case ONE:
+            case 49:
                 Serial.println("Start Program");
                 startProgram();
                 break;
-            case TWO:
+            case 50:
                 Serial.println("Send States");
                 sendAllStates();
                 break;
-            case THREE:
+            case 51:
                 Serial.println("Get Current");
                 sendCurrent();
                 break;
-            case FOUR:
+            case 52:
                 Serial.println("Fwd Jog");
                 jogStart(FORWARD);
                 break;
-            case FIVE:
+            case 53:
                 Serial.println("Back Jog");
                 jogStart(BACKWARD);
                 break;
-            case SIX:
+            case 54:
                 Serial.println("Stop Jog");
                 jogStop();
                 break;
-            case SEVEN:
+            case 55:
                 Serial.println("Set State");
                 setState();
                 break;
-            case EIGHT:
+            case 56:
                 Serial.println("Change Gate");
                 toggleGate();
                 break;
-            case NINE:
-                Serial.println("Send to Start");
-                sendToLimit(START);
-                break;
-            case A:
-                Serial.println("Send to End");
-                sendToLimit(END);
-                break;            
             default:
-                return -1;
+                return -2;
                 break;
             }
             return 1;

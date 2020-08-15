@@ -90,7 +90,8 @@ class MotorController
     //Control Functions
     void jogStart(char dir);
     void jogStop();
-    void sendToLimit(char dir);
+    void goToStart();
+    void goToEnd();
     void iterateState();
     void toggleGate();
 
