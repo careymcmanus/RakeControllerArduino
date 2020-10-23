@@ -14,7 +14,6 @@ void BtnProc::init(){
       {
         pinMode(cBtnData[i].pin, INPUT_PULLUP);
       }
-      printButtons();
     }
 }
 
@@ -51,7 +50,8 @@ void BtnProc::init(){
 
 void BtnProc::getFlags(){
   filterAllButtons();
-  *buttonFlags |= btns & ~lastButtons;;
+  *buttonFlags |= btns & ~lastButtons;
+  
   lastButtons = btns;
 }
 

@@ -20,10 +20,9 @@ struct rakePrg{
 };
 
 struct OutPinArray{
-  uint8_t EN;
+  uint8_t Drv;
   uint8_t Dir;
   uint8_t Lift;
-  uint8_t Drop;
 };
 
 struct Btn {

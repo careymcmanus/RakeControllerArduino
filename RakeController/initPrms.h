@@ -11,7 +11,7 @@ extern rakePrg prgms[2];
 
 extern OutPinArray drvPins; 
 
-extern Btn btnData[2];
+extern Btn btnData[3];
 
 extern BtnSet btnSet;
 

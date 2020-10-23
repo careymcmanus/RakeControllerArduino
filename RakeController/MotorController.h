@@ -65,7 +65,6 @@ class MotorController
     }
 
   public:
-    MotorController();
 
     //Initialiser Functions
     void controllerInit(SoftwareSerial *sS);
@@ -82,6 +81,9 @@ class MotorController
     void stopProgram();
     void startMotor();
     void stopMotor();
+    void drive();
+    void reset();
+    void overrunError();
 
     //Main calling functions
     void main();
