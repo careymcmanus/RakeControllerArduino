@@ -55,6 +55,7 @@ void MotorController::consumeFlags()
   if (btnFlags & (1 << RESET_BTN))
   {
     Serial.println("RESET");
+    sendToLimit(BACKWARD);
     btnFlags &= ~(1 << RESET_BTN);
   }
   if (stateFlags & (1 << CONTROLLER_ACTIVE))
@@ -74,9 +75,11 @@ void MotorController::consumeFlags()
 void MotorController::controllerInit(SoftwareSerial *sS)
 {
   stateFlags |= (1 << FIRST_ON);
+  
   pinMode(drvPins.Dir, OUTPUT);
   pinMode(drvPins.Lift, OUTPUT);
   pinMode(drvPins.Drv, OUTPUT);
+  //TODO NO MAGIC NUMBERS
   pinMode(5, OUTPUT); // TODO PIN 5 is ON Indicator
   pinMode(4, OUTPUT); // TODO PIN 4 is OVERRUN Indicator
   pinMode(7, INPUT_PULLUP);
@@ -195,6 +198,8 @@ void MotorController::sendToLimit(char limit)
   stopMotor();
   stateFlags |= (1 << PAUSED);
   digitalWrite(drvPins.Dir, limit);
+  //TODO potentially have some sort of time delay on gate opening
+  digitalWrite(drvPins.Gate, HIGH);
   updateSpeed(150);
   startMotor();
 }
